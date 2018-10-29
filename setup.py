@@ -16,6 +16,7 @@ setup(
     keywords="",
     url="https://github.com/u1234x1234/autovers",
     packages=['autovers'],
+    install_requires=['appdirs==1.4.3', 'GitPython==2.1.11'],
     long_description=read('README.md'),
     classifiers=[
         "Development Status :: 3 - Alpha",
