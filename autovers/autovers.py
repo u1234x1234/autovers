@@ -1,7 +1,8 @@
 #!/usr/bin/env python3 
-import os
 import glob
 import logging
+import os
+
 import appdirs
 import git
 
