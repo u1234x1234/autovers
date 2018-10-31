@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name="autovers",
-    version="0.0.1",
+    version="0.0.2",
     author="u1234x1234",
     author_email="u1234x1234@gmail.com",
     description=(""),

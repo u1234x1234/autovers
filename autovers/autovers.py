@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 
+#!/usr/bin/env python3
 import glob
 import logging
 import os
@@ -6,24 +6,40 @@ import os
 import appdirs
 import git
 
-APP_NAME = 'autovers'
+APPLICATION_NAME = 'autovers'
+EXTENSIONS = ['.py']
 
 
 def commit():
     """Commit all files in current directory and return string with commit hash
     """
-    CONFIG_DIR = appdirs.user_data_dir(APP_NAME)
-    os.environ['GIT_DIR'] = CONFIG_DIR
+    logger = logging.getLogger(__name__)
+
+    working_dir = os.getcwd()
+    user_data_dir = appdirs.user_data_dir(APPLICATION_NAME)
+
+    workspace_dir = os.path.join(user_data_dir, working_dir.strip('/'))
+    if not os.path.exists(workspace_dir):
+        os.makedirs(workspace_dir)
+        logger.info('Workspace {} created.'.format(workspace_dir))
+
+    os.environ['GIT_DIR'] = workspace_dir
     os.environ['GIT_WORK_TREE'] = os.getcwd()
 
     git.Repo.init(bare=False)
     repo = git.Repo()
 
-    root_dir = os.getcwd()
-    files = glob.glob('**/*.py', recursive=True)
-    files = [os.path.join(root_dir, f) for f in files]
+    files = []
+    for extension in EXTENSIONS:
+        files += glob.glob('**/*{}'.format(extension), recursive=True)
+    files = [os.path.join(working_dir, f) for f in files]
 
     repo.index.add(files)
-    repo.index.commit('v1')
 
+    if repo.head.is_valid():
+        message = str(repo.head.commit.count() + 1)
+    else:
+        message = '1'
+
+    repo.index.commit(message)
     return str(repo.head.commit)
