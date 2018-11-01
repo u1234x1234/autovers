@@ -2,6 +2,8 @@
 import glob
 import logging
 import os
+import tempfile
+import subprocess
 
 import appdirs
 import git
@@ -36,6 +38,13 @@ def commit():
 
     repo.index.add(files)
 
+    with tempfile.NamedTemporaryFile(dir='./') as tmp_file:
+        out = subprocess.check_output(['pip', 'freeze', '--all'])
+        tmp_file.write(out)
+        tmp_file.flush()
+        print(tmp_file.name)
+        repo.index.add(tmp_file.name)
+
     if repo.head.is_valid():
         message = str(repo.head.commit.count() + 1)
     else:
@@ -43,3 +52,5 @@ def commit():
 
     repo.index.commit(message)
     return str(repo.head.commit)
+
+commit()
