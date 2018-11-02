@@ -9,9 +9,10 @@ import appdirs
 import git
 
 APPLICATION_NAME = 'autovers'
-EXTENSIONS = ['.py']
 PIP_LIST_PATH = 'pip_list.txt'
 CONDA_LIST_PATH = 'conda_list.txt'
+AUTOVERS_EXTENSIONS_KEY = 'AUTOVERS_EXTENSIONS'
+DEFAULT_EXTENSIONS = ['.py']
 
 
 @contextmanager
@@ -29,6 +30,12 @@ def commit(save_pip_state=True, save_conda_state=True):
     """
     logger = logging.getLogger(__name__)
 
+    if AUTOVERS_EXTENSIONS_KEY in os.environ:
+        extensions = os.environ[AUTOVERS_EXTENSIONS_KEY].replace('.', '').split(',')
+        logger.info('List of extensions from env: {}'.format(extensions))
+    else:
+        extensions = DEFAULT_EXTENSIONS
+
     working_dir = os.getcwd()
     user_data_dir = appdirs.user_data_dir(APPLICATION_NAME)
 
@@ -44,7 +51,7 @@ def commit(save_pip_state=True, save_conda_state=True):
     repo = git.Repo()
 
     files = []
-    for extension in EXTENSIONS:
+    for extension in extensions:
         files += glob.glob('**/*{}'.format(extension), recursive=True)
     files = [os.path.join(working_dir, f) for f in files]
 
