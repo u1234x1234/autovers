@@ -78,4 +78,9 @@ def commit(message='', save_pip_state=True, save_conda_state=True):
                 logger.warning('Error in executing conda list command: {}'.format(e))
 
     repo.index.commit(message)
+
+    # TODO replace with context manager
+    del os.environ['GIT_WORK_TREE']
+    del os.environ['GIT_DIR']
+
     return str(repo.head.commit)
