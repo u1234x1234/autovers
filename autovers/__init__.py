@@ -1,3 +1,3 @@
-from .autovers import commit
+from .autovers import commit, TemporaryFile
 
-__all__ = ['commit']
+__all__ = ['commit', 'TemporaryFile']

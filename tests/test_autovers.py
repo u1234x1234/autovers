@@ -28,3 +28,13 @@ def test_commit():
             message = 'commit_message'
             experiment_name = autovers.commit(message)
             assert repo.head.commit.message == message
+
+
+def test_temp_file():
+    filename = 'temp_file'
+
+    with autovers.TemporaryFile(filename) as out_file:
+        print('TMP FILE', file=out_file)
+        assert os.path.exists(filename) is True
+
+    assert os.path.exists(filename) is False
