@@ -25,7 +25,7 @@ def TemporaryFile(filename, mode='w+'):
         os.remove(filename)
 
 
-def commit(save_pip_state=True, save_conda_state=True):
+def commit(message='', save_pip_state=True, save_conda_state=True):
     """Commit all files in current directory and return string with commit hash
     """
     logger = logging.getLogger(__name__)
@@ -76,12 +76,6 @@ def commit(save_pip_state=True, save_conda_state=True):
                 repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
             except Exception as e:
                 logger.warning('Error in executing conda list command: {}'.format(e))
-
-
-    if repo.head.is_valid():
-        message = str(repo.head.commit.count() + 1)
-    else:
-        message = '1'
 
     repo.index.commit(message)
     return str(repo.head.commit)
