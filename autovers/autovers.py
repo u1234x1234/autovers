@@ -7,6 +7,8 @@ from contextlib import contextmanager
 
 import appdirs
 import git
+import tempenviron
+
 
 APPLICATION_NAME = 'autovers'
 PIP_LIST_PATH = 'pip_list.txt'
@@ -44,43 +46,37 @@ def commit(message='', save_pip_state=True, save_conda_state=True):
         os.makedirs(workspace_dir)
         logger.info('Workspace {} created.'.format(workspace_dir))
 
-    os.environ['GIT_DIR'] = workspace_dir
-    os.environ['GIT_WORK_TREE'] = os.getcwd()
+    with tempenviron.updated_environ(GIT_DIR=workspace_dir, GIT_WORK_TREE=os.getcwd()):
+        git.Repo.init(bare=False)
+        repo = git.Repo()
 
-    git.Repo.init(bare=False)
-    repo = git.Repo()
+        files = []
+        for extension in extensions:
+            files += glob.glob('**/*{}'.format(extension), recursive=True)
+        files = [os.path.join(working_dir, f) for f in files]
 
-    files = []
-    for extension in extensions:
-        files += glob.glob('**/*{}'.format(extension), recursive=True)
-    files = [os.path.join(working_dir, f) for f in files]
+        repo.index.add(files)
 
-    repo.index.add(files)
+        if save_pip_state:
+            with TemporaryFile(PIP_LIST_PATH) as tmp_file:
+                try:
+                    out = subprocess.check_output(['pip', 'freeze', '--all'])
+                    tmp_file.write(out.decode())
+                    tmp_file.flush()
+                    repo.index.add([os.path.join(working_dir, PIP_LIST_PATH)])
+                except Exception as e:
+                    logger.warning('Error in executing pip freeze command: {}'.format(e))
 
-    if save_pip_state:
-        with TemporaryFile(PIP_LIST_PATH) as tmp_file:
-            try:
-                out = subprocess.check_output(['pip', 'freeze', '--all'])
-                tmp_file.write(out.decode())
-                tmp_file.flush()
-                repo.index.add([os.path.join(working_dir, PIP_LIST_PATH)])
-            except Exception as e:
-                logger.warning('Error in executing pip freeze command: {}'.format(e))
+        if save_conda_state:
+            with TemporaryFile(CONDA_LIST_PATH) as tmp_file:
+                try:
+                    out = subprocess.check_output(['conda', 'list', '--export'])
+                    tmp_file.write(out.decode())
+                    tmp_file.flush()
+                    repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
+                except Exception as e:
+                    logger.warning('Error in executing conda list command: {}'.format(e))
 
-    if save_conda_state:
-        with TemporaryFile(CONDA_LIST_PATH) as tmp_file:
-            try:
-                out = subprocess.check_output(['conda', 'list', '--export'])
-                tmp_file.write(out.decode())
-                tmp_file.flush()
-                repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
-            except Exception as e:
-                logger.warning('Error in executing conda list command: {}'.format(e))
-
-    repo.index.commit(message)
-
-    # TODO replace with context manager
-    del os.environ['GIT_WORK_TREE']
-    del os.environ['GIT_DIR']
+        repo.index.commit(message)
 
     return str(repo.head.commit)

@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name="autovers",
-    version="0.0.2",
+    version="0.0.3",
     author="u1234x1234",
     author_email="u1234x1234@gmail.com",
     description=(""),
@@ -16,7 +16,7 @@ setup(
     keywords="",
     url="https://github.com/u1234x1234/autovers",
     packages=['autovers'],
-    install_requires=['appdirs==1.4.3', 'GitPython==2.1.11'],
+    install_requires=['appdirs==1.4.3', 'GitPython==2.1.11', 'tempenviron==0.0.1'],
     long_description=read('README.md'),
     classifiers=[
         "Development Status :: 3 - Alpha",
