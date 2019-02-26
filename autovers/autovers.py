@@ -3,6 +3,7 @@ import glob
 import logging
 import os
 import subprocess
+import sys
 from contextlib import contextmanager
 
 import appdirs
@@ -13,6 +14,7 @@ import tempenviron
 APPLICATION_NAME = 'autovers'
 PIP_LIST_PATH = 'pip_list.txt'
 CONDA_LIST_PATH = 'conda_list.txt'
+FULL_COMMAND = 'command.txt'
 AUTOVERS_EXTENSIONS_KEY = 'AUTOVERS_EXTENSIONS'
 DEFAULT_EXTENSIONS = ['.py']
 
@@ -76,6 +78,11 @@ def commit(message='', save_pip_state=True, save_conda_state=True):
                     repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
                 except Exception as e:
                     logger.warning('Error in executing conda list command: {}'.format(e))
+
+        with TemporaryFile(FULL_COMMAND) as tmp_file:
+            print(' '.join(sys.argv), file=tmp_file)
+            tmp_file.flush()
+            repo.index.add([os.path.join(working_dir, FULL_COMMAND)])
 
         repo.index.commit(message)
 
