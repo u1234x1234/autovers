@@ -11,10 +11,10 @@ import git
 import tempenviron
 
 
-APPLICATION_NAME = 'autovers'
 PIP_LIST_PATH = 'pip_list.txt'
 CONDA_LIST_PATH = 'conda_list.txt'
 FULL_COMMAND = 'command.txt'
+APPLICATION_NAME = 'autovers'
 AUTOVERS_EXTENSIONS_KEY = 'AUTOVERS_EXTENSIONS'
 DEFAULT_EXTENSIONS = ['.py']
 

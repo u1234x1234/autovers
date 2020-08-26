@@ -1,0 +1,40 @@
+import atexit
+import os
+import sys
+from functools import partial
+
+import appdirs
+import git
+import tempenviron
+
+import autovers
+
+
+def clean_up(paths):
+    for path in paths:
+        os.unlink(path)
+
+
+if __name__ == "__main__":
+
+    working_dir = os.getcwd()
+    user_data_dir = appdirs.user_data_dir(autovers.APPLICATION_NAME)
+    workspace_dir = f"{user_data_dir}/{working_dir}"
+    os.environ["GIT_DIR"] = workspace_dir
+
+    to_remove = []
+
+    with tempenviron.updated_environ(GIT_DIR=workspace_dir, GIT_WORK_TREE=working_dir):
+        git.Repo.init(bare=False)
+        repo = git.Repo()
+
+        for path in [
+            autovers.FULL_COMMAND,
+            autovers.CONDA_LIST_PATH,
+            autovers.PIP_LIST_PATH,
+        ]:
+            repo.index.checkout([path])
+            to_remove.append(path)
+
+        atexit.register(partial(clean_up, to_remove))
+        os.system(" ".join(sys.argv[1:]))
