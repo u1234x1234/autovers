@@ -1,3 +1,10 @@
-from .autovers import commit, TemporaryFile, PIP_LIST_PATH, CONDA_LIST_PATH, FULL_COMMAND, APPLICATION_NAME
+from .autovers import (
+    APPLICATION_NAME,
+    CONDA_LIST_PATH,
+    FULL_COMMAND,
+    PIP_LIST_PATH,
+    TemporaryFile,
+    commit,
+)
 
-__all__ = ['commit', 'APPLICATION_NAME']
+__all__ = ["commit", "APPLICATION_NAME"]
