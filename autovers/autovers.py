@@ -16,6 +16,7 @@ FULL_COMMAND = "command.txt"
 APPLICATION_NAME = "autovers"
 AUTOVERS_EXTENSIONS_KEY = "AUTOVERS_EXTENSIONS"
 DEFAULT_EXTENSIONS = [".py"]
+LOGGER = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -28,29 +29,32 @@ def TemporaryFile(filename, mode="w+"):
         os.remove(filename)
 
 
-def commit(message="", save_pip_state=True, save_conda_state=True):
-    """Commit all files in current directory and return string with commit hash
-    """
-    logger = logging.getLogger(__name__)
-
-    if AUTOVERS_EXTENSIONS_KEY in os.environ:
-        extensions = os.environ[AUTOVERS_EXTENSIONS_KEY].replace(".", "").split(",")
-        logger.info("List of extensions from env: {}".format(extensions))
-    else:
-        extensions = DEFAULT_EXTENSIONS
-
-    working_dir = os.getcwd()
+@contextmanager
+def _provide_git_repo(working_dir):
     user_data_dir = appdirs.user_data_dir(APPLICATION_NAME)
 
     workspace_dir = os.path.join(user_data_dir, working_dir.strip("/"))
     if not os.path.exists(workspace_dir):
         os.makedirs(workspace_dir)
-        logger.info("Workspace {} created.".format(workspace_dir))
+        LOGGER.info("Workspace {} created.".format(workspace_dir))
 
     with tempenviron.updated_environ(GIT_DIR=workspace_dir, GIT_WORK_TREE=os.getcwd()):
         git.Repo.init(bare=False)
         repo = git.Repo()
+        yield repo
 
+
+def commit(message="", save_pip_state=True, save_conda_state=True):
+    """Commit all files in current directory and return string with commit hash"""
+
+    if AUTOVERS_EXTENSIONS_KEY in os.environ:
+        extensions = os.environ[AUTOVERS_EXTENSIONS_KEY].replace(".", "").split(",")
+        LOGGER.info("List of extensions from env: {}".format(extensions))
+    else:
+        extensions = DEFAULT_EXTENSIONS
+
+    working_dir = os.getcwd()
+    with _provide_git_repo(working_dir) as repo:
         files = []
         for extension in extensions:
             files += glob.glob("**/*{}".format(extension), recursive=True)
@@ -66,7 +70,7 @@ def commit(message="", save_pip_state=True, save_conda_state=True):
                     tmp_file.flush()
                     repo.index.add([os.path.join(working_dir, PIP_LIST_PATH)])
                 except Exception as e:
-                    logger.warning(
+                    LOGGER.warning(
                         "Error in executing pip freeze command: {}".format(e)
                     )
 
@@ -78,7 +82,7 @@ def commit(message="", save_pip_state=True, save_conda_state=True):
                     tmp_file.flush()
                     repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
                 except Exception as e:
-                    logger.warning(
+                    LOGGER.warning(
                         "Error in executing conda list command: {}".format(e)
                     )
 
@@ -87,6 +91,19 @@ def commit(message="", save_pip_state=True, save_conda_state=True):
             tmp_file.flush()
             repo.index.add([os.path.join(working_dir, FULL_COMMAND)])
 
-        repo.index.commit(message)
+        r_commit = repo.index.commit(message)
 
-    return str(repo.head.commit)
+    return r_commit.hexsha
+
+
+def last_diff():
+    formatted_diffs = []
+
+    working_dir = os.getcwd()
+    with _provide_git_repo(working_dir) as repo:
+        # create_patch is slower but returns the full diff information
+        diffs = repo.head.commit.diff("HEAD~1", create_patch=True)
+        for d in diffs:
+            formatted_diffs.append((d.a_path, d.diff.decode()))
+
+    return formatted_diffs
