@@ -102,7 +102,7 @@ def last_diff():
     working_dir = os.getcwd()
     with _provide_git_repo(working_dir) as repo:
         # create_patch is slower but returns the full diff information
-        diffs = repo.head.commit.diff("HEAD~1", create_patch=True)
+        diffs = repo.commit("HEAD~1").diff(repo.head, create_patch=True)
         for d in diffs:
             formatted_diffs.append((d.a_path, d.diff.decode()))
 
