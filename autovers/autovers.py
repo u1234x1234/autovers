@@ -2,9 +2,11 @@
 import glob
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
+from subprocess import check_call
 
 import appdirs
 import git
@@ -33,7 +35,8 @@ def TemporaryFile(filename, mode="w+"):
 def _provide_git_repo(working_dir):
     user_data_dir = appdirs.user_data_dir(APPLICATION_NAME)
 
-    workspace_dir = os.path.join(user_data_dir, working_dir.strip("/"))
+    workspace_dir = os.path.join(user_data_dir, working_dir.strip("/"), "git")
+
     if not os.path.exists(workspace_dir):
         os.makedirs(workspace_dir)
         LOGGER.info("Workspace {} created.".format(workspace_dir))
@@ -44,7 +47,41 @@ def _provide_git_repo(working_dir):
         yield repo
 
 
-def commit(message="", save_pip_state=True, save_conda_state=True):
+def _save_pip_state(repo, working_dir, condition):
+    if condition:
+        with TemporaryFile(PIP_LIST_PATH) as tmp_file:
+            try:
+                out = subprocess.check_output(["pip", "freeze", "--all"])
+                tmp_file.write(out.decode())
+                tmp_file.flush()
+                repo.index.add([os.path.join(working_dir, PIP_LIST_PATH)])
+            except Exception as e:
+                LOGGER.warning("Error in executing pip freeze command: {}".format(e))
+
+
+def _save_conda_state(repo, working_dir, condition):
+    if condition:
+        with TemporaryFile(CONDA_LIST_PATH) as tmp_file:
+            try:
+                out = subprocess.check_output(["conda", "list", "--export"])
+                tmp_file.write(out.decode())
+                tmp_file.flush()
+                repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
+            except Exception as e:
+                LOGGER.warning("Error in executing conda list command: {}".format(e))
+
+
+def _save_command(repo, working_dir, condition):
+    if condition:
+        with TemporaryFile(FULL_COMMAND) as tmp_file:
+            print(" ".join(sys.argv), file=tmp_file)
+            tmp_file.flush()
+            repo.index.add([os.path.join(working_dir, FULL_COMMAND)])
+
+
+def commit(
+    message="", save_pip_state=True, save_conda_state=True, save_command=True, verbose=0
+):
     """Commit all files in current directory and return string with commit hash"""
 
     if AUTOVERS_EXTENSIONS_KEY in os.environ:
@@ -62,36 +99,21 @@ def commit(message="", save_pip_state=True, save_conda_state=True):
 
         repo.index.add(files)
 
-        if save_pip_state:
-            with TemporaryFile(PIP_LIST_PATH) as tmp_file:
-                try:
-                    out = subprocess.check_output(["pip", "freeze", "--all"])
-                    tmp_file.write(out.decode())
-                    tmp_file.flush()
-                    repo.index.add([os.path.join(working_dir, PIP_LIST_PATH)])
-                except Exception as e:
-                    LOGGER.warning(
-                        "Error in executing pip freeze command: {}".format(e)
-                    )
-
-        if save_conda_state:
-            with TemporaryFile(CONDA_LIST_PATH) as tmp_file:
-                try:
-                    out = subprocess.check_output(["conda", "list", "--export"])
-                    tmp_file.write(out.decode())
-                    tmp_file.flush()
-                    repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
-                except Exception as e:
-                    LOGGER.warning(
-                        "Error in executing conda list command: {}".format(e)
-                    )
-
-        with TemporaryFile(FULL_COMMAND) as tmp_file:
-            print(" ".join(sys.argv), file=tmp_file)
-            tmp_file.flush()
-            repo.index.add([os.path.join(working_dir, FULL_COMMAND)])
+        _save_pip_state(repo, working_dir, save_pip_state)
+        _save_conda_state(repo, working_dir, save_conda_state)
+        _save_command(repo, working_dir, save_command)
 
         r_commit = repo.index.commit(message)
+        if verbose:
+            print("[Autovers] Number of commits: ", working_dir, r_commit.count())
+
+    # Clone
+    path = appdirs.user_data_dir(APPLICATION_NAME)
+    path = os.path.join(path, working_dir.strip("/"))
+    shutil.rmtree(path + "/source_code", ignore_errors=True)
+    check_call(
+        ["git", "clone", path + "/git", path + "/source_code"], stderr=subprocess.DEVNULL
+    )
 
     return r_commit.hexsha
 
