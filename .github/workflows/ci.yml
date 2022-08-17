@@ -38,3 +38,5 @@ jobs:
     - name: Test with pytest
       run: |
         python -m pytest -s --cov-report term-missing --cov autovers -v
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
