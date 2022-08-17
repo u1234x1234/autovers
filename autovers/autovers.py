@@ -7,10 +7,12 @@ import subprocess
 import sys
 from contextlib import contextmanager
 from subprocess import check_call
+from tempfile import gettempdir
+from typing import Optional
 
 import appdirs
 import git
-import tempenviron
+from filelock import FileLock
 
 PIP_LIST_PATH = "pip_list.txt"
 CONDA_LIST_PATH = "conda_list.txt"
@@ -19,6 +21,7 @@ APPLICATION_NAME = "autovers"
 AUTOVERS_EXTENSIONS_KEY = "AUTOVERS_EXTENSIONS"
 DEFAULT_EXTENSIONS = [".py"]
 LOGGER = logging.getLogger(__name__)
+LOCKFILE_PATH = f"{gettempdir()}/autovers.lock"
 
 
 @contextmanager
@@ -31,6 +34,37 @@ def TemporaryFile(filename, mode="w+"):
         os.remove(filename)
 
 
+class IllegalArgumentError(ValueError):
+    pass
+
+
+@contextmanager
+def patch_env_vars(dict_env: Optional[dict] = None, **kwargs_env):
+    if dict_env is None:
+        dict_env = {}
+
+    if not isinstance(dict_env, dict):
+        raise IllegalArgumentError("env must be dictionary")
+
+    dict_env.update(kwargs_env)
+    to_delete = [k for k, v in dict_env.items() if v is None]
+    dict_env = {k: v for k, v in dict_env.items() if v is not None}
+
+    # Save original
+    original_environ = dict(os.environ)
+
+    try:
+        os.environ.update(dict_env)
+        [os.environ.pop(k) for k in to_delete]
+        yield
+    except TypeError as e:
+        raise IllegalArgumentError(e)
+    finally:
+        # Return original
+        os.environ.clear()
+        os.environ.update(original_environ)
+
+
 @contextmanager
 def _provide_git_repo(working_dir):
     user_data_dir = appdirs.user_data_dir(APPLICATION_NAME)
@@ -41,7 +75,7 @@ def _provide_git_repo(working_dir):
         os.makedirs(workspace_dir)
         LOGGER.info("Workspace {} created.".format(workspace_dir))
 
-    with tempenviron.updated_environ(GIT_DIR=workspace_dir, GIT_WORK_TREE=os.getcwd()):
+    with patch_env_vars(GIT_DIR=workspace_dir, GIT_WORK_TREE=os.getcwd()):
         git.Repo.init(bare=False)
         repo = git.Repo()
         yield repo
@@ -80,40 +114,45 @@ def _save_command(repo, working_dir, condition):
 
 
 def commit(
-    message="", save_pip_state=True, save_conda_state=True, save_command=True, verbose=0
+    message="",
+    save_pip_state=False,
+    save_conda_state=False,
+    save_command=True,
+    verbose=0,
 ):
     """Commit all files in current directory and return string with commit hash"""
 
-    if AUTOVERS_EXTENSIONS_KEY in os.environ:
-        extensions = os.environ[AUTOVERS_EXTENSIONS_KEY].replace(".", "").split(",")
-        LOGGER.info("List of extensions from env: {}".format(extensions))
-    else:
-        extensions = DEFAULT_EXTENSIONS
+    with FileLock(LOCKFILE_PATH):
 
-    working_dir = os.getcwd()
-    with _provide_git_repo(working_dir) as repo:
-        files = []
-        for extension in extensions:
-            files += glob.glob("**/*{}".format(extension), recursive=True)
-        files = [os.path.join(working_dir, f) for f in files]
+        if AUTOVERS_EXTENSIONS_KEY in os.environ:
+            extensions = os.environ[AUTOVERS_EXTENSIONS_KEY].replace(".", "").split(",")
+            LOGGER.info("List of extensions from env: {}".format(extensions))
+        else:
+            extensions = DEFAULT_EXTENSIONS
 
-        repo.index.add(files)
+        working_dir = os.getcwd()
+        with _provide_git_repo(working_dir) as repo:
+            files = []
+            for extension in extensions:
+                files += glob.glob("**/*{}".format(extension), recursive=True)
+            files = [os.path.join(working_dir, f) for f in files]
 
-        _save_pip_state(repo, working_dir, save_pip_state)
-        _save_conda_state(repo, working_dir, save_conda_state)
-        _save_command(repo, working_dir, save_command)
+            repo.index.add(files)
 
-        r_commit = repo.index.commit(message)
-        if verbose:
-            print("[Autovers] Number of commits: ", working_dir, r_commit.count())
+            _save_pip_state(repo, working_dir, save_pip_state)
+            _save_conda_state(repo, working_dir, save_conda_state)
+            _save_command(repo, working_dir, save_command)
 
-    # Clone
-    path = appdirs.user_data_dir(APPLICATION_NAME)
-    path = os.path.join(path, working_dir.strip("/"))
-    shutil.rmtree(path + "/source_code", ignore_errors=True)
-    check_call(
-        ["git", "clone", path + "/git", path + "/source_code"], stderr=subprocess.DEVNULL
-    )
+            r_commit = repo.index.commit(message)
+            if verbose:
+                print("[Autovers] Number of commits: ", working_dir, r_commit.count())
+
+        # Clone
+        path = appdirs.user_data_dir(APPLICATION_NAME)
+        path = os.path.join(path, working_dir.strip("/"))
+        shutil.rmtree(path + "/source_code", ignore_errors=True)
+        command = ["git", "clone", path + "/git", path + "/source_code"]
+        check_call(command, stderr=subprocess.DEVNULL)
 
     return r_commit.hexsha
 
