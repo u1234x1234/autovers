@@ -4,10 +4,8 @@ import sys
 from functools import partial
 
 import appdirs
-import git
-import tempenviron
-
 import autovers
+import git
 
 
 def clean_up(paths):
@@ -19,12 +17,13 @@ if __name__ == "__main__":
 
     working_dir = os.getcwd()
     user_data_dir = appdirs.user_data_dir(autovers.APPLICATION_NAME)
-    workspace_dir = f"{user_data_dir}/{working_dir}"
+    workspace_dir = os.path.join(user_data_dir, working_dir.strip("/"), "git")
+
     os.environ["GIT_DIR"] = workspace_dir
 
     to_remove = []
 
-    with tempenviron.updated_environ(GIT_DIR=workspace_dir, GIT_WORK_TREE=working_dir):
+    with autovers.patch_env_vars(GIT_DIR=workspace_dir, GIT_WORK_TREE=working_dir):
         git.Repo.init(bare=False)
         repo = git.Repo()
 
@@ -33,8 +32,11 @@ if __name__ == "__main__":
             autovers.CONDA_LIST_PATH,
             autovers.PIP_LIST_PATH,
         ]:
-            repo.index.checkout([path])
-            to_remove.append(path)
+            try:
+                repo.index.checkout([path])
+                to_remove.append(path)
+            except git.CheckoutError:
+                pass
 
         atexit.register(partial(clean_up, to_remove))
         os.system(" ".join(sys.argv[1:]))

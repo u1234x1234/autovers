@@ -6,6 +6,7 @@ from .autovers import (
     TemporaryFile,
     commit,
     last_diff,
+    patch_env_vars,
 )
 
 __all__ = ["commit", "APPLICATION_NAME"]

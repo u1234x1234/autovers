@@ -24,6 +24,11 @@ LOGGER = logging.getLogger(__name__)
 LOCKFILE_PATH = f"{gettempdir()}/autovers.lock"
 
 
+def init_log():
+    loglevel = os.environ.get("AUTOVERS_LOGLEVEL", "WARNING").upper()
+    logging.basicConfig(level=loglevel)
+
+
 @contextmanager
 def TemporaryFile(filename, mode="w+"):
     file = open(filename, mode=mode)
@@ -81,46 +86,44 @@ def _provide_git_repo(working_dir):
         yield repo
 
 
-def _save_pip_state(repo, working_dir, condition):
-    if condition:
-        with TemporaryFile(PIP_LIST_PATH) as tmp_file:
-            try:
-                out = subprocess.check_output(["pip", "freeze", "--all"])
-                tmp_file.write(out.decode())
-                tmp_file.flush()
-                repo.index.add([os.path.join(working_dir, PIP_LIST_PATH)])
-            except Exception as e:
-                LOGGER.warning("Error in executing pip freeze command: {}".format(e))
-
-
-def _save_conda_state(repo, working_dir, condition):
-    if condition:
-        with TemporaryFile(CONDA_LIST_PATH) as tmp_file:
-            try:
-                out = subprocess.check_output(["conda", "list", "--export"])
-                tmp_file.write(out.decode())
-                tmp_file.flush()
-                repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
-            except Exception as e:
-                LOGGER.warning("Error in executing conda list command: {}".format(e))
-
-
-def _save_command(repo, working_dir, condition):
-    if condition:
-        with TemporaryFile(FULL_COMMAND) as tmp_file:
-            print(" ".join(sys.argv), file=tmp_file)
+def _save_pip_state(repo, working_dir):
+    with TemporaryFile(PIP_LIST_PATH) as tmp_file:
+        try:
+            out = subprocess.check_output(["pip", "freeze", "--all"])
+            tmp_file.write(out.decode())
             tmp_file.flush()
-            repo.index.add([os.path.join(working_dir, FULL_COMMAND)])
+            repo.index.add([os.path.join(working_dir, PIP_LIST_PATH)])
+        except Exception as e:
+            LOGGER.warning("Error in executing pip freeze command: {}".format(e))
+
+
+def _save_conda_state(repo, working_dir):
+    with TemporaryFile(CONDA_LIST_PATH) as tmp_file:
+        try:
+            out = subprocess.check_output(["conda", "list", "--export"])
+            tmp_file.write(out.decode())
+            tmp_file.flush()
+            repo.index.add([os.path.join(working_dir, CONDA_LIST_PATH)])
+        except Exception as e:
+            LOGGER.warning("Error in executing conda list command: {}".format(e))
+
+
+def _save_command(repo, working_dir):
+    with TemporaryFile(FULL_COMMAND) as tmp_file:
+        print(" ".join(sys.argv), file=tmp_file)
+        tmp_file.flush()
+        repo.index.add([os.path.join(working_dir, FULL_COMMAND)])
 
 
 def commit(
     message="",
     save_pip_state=False,
     save_conda_state=False,
-    save_command=True,
+    save_command=False,
     verbose=0,
 ):
     """Commit all files in current directory and return string with commit hash"""
+    init_log()
 
     with FileLock(LOCKFILE_PATH):
 
@@ -136,18 +139,22 @@ def commit(
             for extension in extensions:
                 files += glob.glob("**/*{}".format(extension), recursive=True)
             files = [os.path.join(working_dir, f) for f in files]
+            LOGGER.info(f"The following files will be commited to git: {files}")
 
             repo.index.add(files)
 
-            _save_pip_state(repo, working_dir, save_pip_state)
-            _save_conda_state(repo, working_dir, save_conda_state)
-            _save_command(repo, working_dir, save_command)
+            if save_pip_state:
+                _save_pip_state(repo, working_dir)
+            if save_conda_state:
+                _save_conda_state(repo, working_dir)
+            if save_command:
+                _save_command(repo, working_dir)
 
             r_commit = repo.index.commit(message)
             if verbose:
                 print("[Autovers] Number of commits: ", working_dir, r_commit.count())
 
-        # Clone
+        # Copy source codes from git to make them readable
         path = appdirs.user_data_dir(APPLICATION_NAME)
         path = os.path.join(path, working_dir.strip("/"))
         shutil.rmtree(path + "/source_code", ignore_errors=True)
@@ -158,6 +165,8 @@ def commit(
 
 
 def last_diff():
+    init_log()
+
     formatted_diffs = []
 
     working_dir = os.getcwd()

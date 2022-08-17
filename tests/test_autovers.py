@@ -12,29 +12,34 @@ def test_commit():
     with tempfile.TemporaryDirectory() as tmp_dir:
 
         # Do not use default ~/.local/ directory, save to temporary
-        with mock.patch('appdirs.user_data_dir') as patched_func:
+        with mock.patch("appdirs.user_data_dir") as patched_func:
             patched_func.return_value = tmp_dir
 
             experiment_name = autovers.commit()
 
-            work_dir = os.path.join(tmp_dir, os.getcwd().strip('/'))
-            os.environ['GIT_DIR'] = work_dir
+            work_dir = os.path.join(tmp_dir, os.getcwd().strip("/"), "git")
+            os.environ["GIT_DIR"] = work_dir
 
             repo = git.Repo()
             assert repo.head.commit.count() == 1
-            assert repo.head.commit.message == ''
+            assert repo.head.commit.message == ""
 
             # check commit message
-            message = 'commit_message'
+            message = "commit_message"
             experiment_name = autovers.commit(message)
             assert repo.head.commit.message == message
 
 
 def test_temp_file():
-    filename = 'temp_file'
+    filename = "temp_file"
 
     with autovers.TemporaryFile(filename) as out_file:
-        print('TMP FILE', file=out_file)
+        print("TMP FILE", file=out_file)
         assert os.path.exists(filename) is True
 
     assert os.path.exists(filename) is False
+
+
+if __name__ == "__main__":
+    import fire
+    fire.Fire()
